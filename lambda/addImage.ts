@@ -1,34 +1,46 @@
-import multipart = require('aws-lambda-multipart-parser');
-import AWS = require('aws-sdk');
+import AWS = require("aws-sdk");
 const s3 = new AWS.S3();
 
-exports.handler = async (event: { body: string; headers: Record<string, string>; }) => {
+// const BUCKET_NAME = process.env.FILE_UPLOAD_BUCKET_NAME;
+const BUCKET_NAME = "ImagesBucket";
+
+module.exports.handler = async (event: any) => {
+  console.log("event", event);
+
+  const response = {
+    isBase64Encoded: false,
+    statusCode: 200,
+    body: JSON.stringify({ message: "Successfully uploaded file to S3" }),
+  };
+
   try {
-    // Parse the incoming multipart/form-data request
-    const body = JSON.parse(event.body);
-    const formData = multipart.parse(body, event.headers);
-
-    // Access the uploaded file from the form data
-    const uploadedFile = formData.files['file']; // 'file' should match the field name in your form
-
-    // Use the AWS SDK to upload the file to an S3 bucket
+    const parsedBody = JSON.parse(event.body);
+    const base64File = parsedBody.file;
+    const decodedFile = Buffer.from(
+      base64File.replace(/^data:image\/\w+;base64,/, ""),
+      "base64"
+    );
     const params = {
-      Bucket: 'ImagesBucket',
-      Key: 'path/to/uploaded/file.ext',
-      Body: uploadedFile.content,
+      Bucket: BUCKET_NAME,
+      Key: `images/${new Date().toISOString()}.jpeg`,
+      Body: decodedFile,
+      ContentType: "image/jpeg",
     };
 
-    await s3.upload(params).promise();
+    const uploadResult = await s3.upload(params).promise();
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ message: 'File uploaded successfully' }),
-    };
-  } catch (error) {
-    console.error('Error:', error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ message: 'Internal server error' }),
-    };
+    response.body = JSON.stringify({
+      message: "Successfully uploaded file to S3",
+      uploadResult,
+    });
+  } catch (e) {
+    console.error(e);
+    response.body = JSON.stringify({
+      message: "File failed to upload",
+      errorMessage: e,
+    });
+    response.statusCode = 500;
   }
+
+  return response;
 };
