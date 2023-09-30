@@ -1,8 +1,0 @@
-
-scalar Upload
-input DemoInput {
-  image: Upload!
-}
-type Mutation {
-  addImage(input: DemoInput!): Boolean
-}

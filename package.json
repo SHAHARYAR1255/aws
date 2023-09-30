@@ -8,7 +8,8 @@
     "build": "tsc && cdk deploy",
     "watch": "tsc -w",
     "test": "jest",
-    "cdk": "cdk"
+    "cdk": "cdk",
+    "destroy": "cdk destroy"
   },
   "devDependencies": {
     "@types/jest": "^29.5.1",
@@ -21,8 +22,12 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.421.0",
+    "@types/formidable": "^3.4.3",
     "aws-cdk-lib": "^2.99.0",
+    "aws-sdk": "^2.1467.0",
     "constructs": "^10.0.0",
+    "formidable": "^3.5.1",
+    "lambda-multipart-parser": "^1.0.1",
     "source-map-support": "^0.5.21"
   }
 }
