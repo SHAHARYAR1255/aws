@@ -1,12 +1,13 @@
 import AWS = require("aws-sdk");
 const s3 = new AWS.S3();
 
-// const BUCKET_NAME = process.env.FILE_UPLOAD_BUCKET_NAME;
-const BUCKET_NAME = "ImagesBucket";
+const BUCKET_NAME = process.env.DIARY_BUCKET || "";
+// const BUCKET_NAME = "DiaryBucket";
 
 module.exports.handler = async (event: any) => {
   console.log("event", event);
 
+  
   const response = {
     isBase64Encoded: false,
     statusCode: 200,
@@ -14,17 +15,21 @@ module.exports.handler = async (event: any) => {
   };
 
   try {
-    const parsedBody = JSON.parse(event.body);
-    const base64File = parsedBody.file;
-    const decodedFile = Buffer.from(
-      base64File.replace(/^data:image\/\w+;base64,/, ""),
-      "base64"
-    );
+     // Parse the request body to get the binary data (file content)
+     const fileContent = Buffer.from(event.body, 'base64');
+
+    // const parsedBody = JSON.parse(event.body);
+    // const base64File = parsedBody.file;
+    // const decodedFile = Buffer.from(
+    //   base64File.replace(/^data:image\/\w+;base64,/, ""),
+    //   "base64"
+    // );
+    console.log("fileContent",fileContent)
     const params = {
       Bucket: BUCKET_NAME,
-      Key: `images/${new Date().toISOString()}.jpeg`,
-      Body: decodedFile,
-      ContentType: "image/jpeg",
+      Key: `1233456.jpeg`,
+      Body: fileContent,
+      // ContentType: "image/jpeg",
     };
 
     const uploadResult = await s3.upload(params).promise();

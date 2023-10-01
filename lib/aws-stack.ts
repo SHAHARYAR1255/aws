@@ -135,14 +135,14 @@
 //     //       "multipart/form-data": `
 //     //         #set($inputRoot = $input.path('$'))
 //     //         #set($formData = {})
-            
+
 //     //         #foreach($part in $inputRoot.parts)
 //     //           #set($formData["$part.name"] = {
 //     //             "contentType": "$part.contentType",
 //     //             "content": "$util.base64Encode($part.content)"
 //     //           })
 //     //         #end
-            
+
 //     //         {
 //     //           "input": {
 //     //             "actionType": "create",
@@ -160,7 +160,7 @@
 //     //         responseTemplates: {
 //     //           "application/json": `
 //     //             #set($inputRoot = $input.path('$'))
-  
+
 //     //             #if($input.path('$.status').toString().equals("FAILED"))
 //     //               #set($context.responseOverride.status = 500)
 //     //               {
@@ -214,3 +214,102 @@
 //     });
 //   }
 // }
+
+import * as cdk from "aws-cdk-lib";
+import { Construct } from "constructs";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as apigateway from "aws-cdk-lib/aws-apigateway";
+import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+import * as stepfunctions from "aws-cdk-lib/aws-stepfunctions";
+import * as tasks from "aws-cdk-lib/aws-stepfunctions-tasks";
+import * as s3 from "aws-cdk-lib/aws-s3";
+import { App, Stack, RemovalPolicy, Duration } from "aws-cdk-lib";
+import * as iam from "aws-cdk-lib/aws-iam";
+import * as logs from "aws-cdk-lib/aws-logs";
+import { Role, ServicePrincipal } from "aws-cdk-lib/aws-iam";
+
+export class DiaryStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+    super(scope, id, props);
+
+    //images bucket
+    const bucket = new s3.Bucket(this, "DiaryBucket", {
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+
+    const DiaryBucketLambda = new lambda.Function(this, "DiaryBucketFunction", {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: "addImage.handler",
+      code: lambda.Code.fromAsset("lambda"),
+      timeout: Duration.seconds(10),
+    });
+
+    DiaryBucketLambda.addEnvironment("DIARY_BUCKET", bucket.bucketName);
+
+    // bucket access to lambda
+
+    bucket.grantReadWrite(DiaryBucketLambda);
+
+    //     // Step 4: Create an API Gateway REST API
+    const devLogGroup = new logs.LogGroup(this, "DiaryLogs");
+
+    const api = new apigateway.RestApi(this, "DiaryApi", {
+      deployOptions: {
+        accessLogDestination: new apigateway.LogGroupLogDestination(
+          devLogGroup
+        ),
+        accessLogFormat: apigateway.AccessLogFormat.jsonWithStandardFields(),
+      },
+      defaultCorsPreflightOptions: {
+        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowMethods: apigateway.Cors.ALL_METHODS,
+        allowHeaders: ["*"],
+        allowCredentials: true,
+      },
+    });
+
+    const diaryResource = api.root.addResource("images");
+    // Configure the integration to pass the entire request to the Lambda function
+    const imageLambdaIntegration = new apigateway.LambdaIntegration(
+      DiaryBucketLambda ,{
+      }
+    );
+    diaryResource.addMethod("POST", imageLambdaIntegration);
+    DiaryBucketLambda.addPermission('PermitAPIGInvocation', {
+      principal: new ServicePrincipal('apigateway.amazonaws.com'),
+      sourceArn: api.arnForExecuteApi('*')
+    });
+    // Note: You may need to adjust the permissions based on your use case
+    // DiaryBucketLambda.addPermission('InvokePermission', {
+    //   action: 'lambda:InvokeFunction',
+    //   principal: new apigateway.AnyAuthorizer().authorizerArn,
+    // });
+
+    // Create an IAM role for the API Gateway
+    const role = new Role(this, "my-role", {
+      assumedBy: new ServicePrincipal("apigateway.amazonaws.com"),
+    });
+
+    // Create an IAM policy statement to allow executing the Lambda function
+    const lambdaExecutionPolicyStatement = new iam.PolicyStatement({
+      actions: ["lambda:InvokeFunction"],
+      resources: [DiaryBucketLambda.functionArn],
+    });
+
+    // Create an IAM policy for API Gateway execution
+    const apiGatewayExecutionPolicy = new iam.Policy(
+      this,
+      "ApiGatewayExecutionPolicy",
+      {
+        statements: [lambdaExecutionPolicyStatement],
+      }
+    );
+    // Attach the policy to the IAM role
+    role.attachInlinePolicy(apiGatewayExecutionPolicy);
+    // Bind the IAM role to the API Gateway
+    // api.bindToRole(role);
+    // Attach the policy to the execution role of the API Gateway
+    // const apiGatewayExecutionRole = api.role;
+    // apiGatewayExecutionRole.attachInlinePolicy(apiGatewayExecutionPolicy);
+  }
+}
